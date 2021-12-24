@@ -19,6 +19,10 @@ void DrawText(const char* text, float x, float y)
 
 }
 
+/*
+* TASK::PED_HAS_USE_SCENARIO_TASK = might be nice for removing control while player is interacting (even necessary?)
+*/
+
 class FWOC
 {
 private:
@@ -30,7 +34,7 @@ private:
 public:
 	FWOC()
 	{
-		fastWalkEnabled = true;
+		fastWalkEnabled = false;
 		momentum = 1.f;
 		momentumSaved = momentum;
 		momentumIncrement = 0.25f;
@@ -65,20 +69,30 @@ public:
 		float	target_moveBlendRatio	= moveBlendRatio;
 		bool	lsMax					= false;
 		float	desiredMBR = moveBlendRatio;
+		bool	controlFlag = false;
+
+		//bool	task = PED::IS_PED_USING_ANY_SCENARIO(player);
 
 		/*
 		*	Momentum is the current desired maximum speed if the player pushes the movement input all the way.
 		*/
 
+		if (!fastWalkEnabled)
+		{
+			if (!sprintPressed && !(moveBlendRatio == 1.35f || moveBlendRatio == 1.5f))
+			{
+				fastWalkEnabled = true;
+			}
+		}
+
 		lsMax = lsMag > 125;
+
+		if (moveBlendRatio == 0.f)
+			momentum = 1.f;
 
 		if (sprintPressed)
 		{
-			if (desiredMBR <= 1.5f)
-			{
-
-			}
-			else if (lsMax || momentum >= 1.f) // if the stick is pushed all the way or the player is already past walking speed, increment momentum
+			if (lsMax || momentum >= 1.f) // if the stick is pushed all the way or the player is already past walking speed, increment momentum
 			{
 				// Momentum is clipped between default walking speed and max running speed, and increased.
 				momentum = max(1.f, momentum);
@@ -90,21 +104,30 @@ public:
 			}
 		}
 
-		//Sprint is held: speed is set to a fraction of the current momentum determined by magnitude of the stick input.
-		if (momentum > 1.f)
+		/*
+		if (desiredMBR == 1.5f)
+			momentum = 1.5f;
+		if (sprintPressed || sprintReleased || sprintHold)
 		{
-
 		}
+		*/
 		
-		if (sprintHold)
+		//Sprint is held: speed is set to a fraction of the current momentum determined by magnitude of the stick input.
+		//if (desiredMBR == 1.35f)
+		//	changeSpeed = false;
+		if (desiredMBR == 1.35f)
+			controlFlag = false;
+		else if (sprintHold)
 		{
 			target_moveBlendRatio = GetFractionByMagnitude(momentum, lsMag);
+			controlFlag = true;
 		}
 		else if (sprintReleased) //Sprint just got released: momentum is set to the current moveblendratio 
 		{
 			momentumSaved = momentum; //the previous momentum is saved so the 
 			target_moveBlendRatio = momentumSaved;
 			momentum = max(1.f, BUILTIN::CEIL(GetFractionByMagnitude(target_moveBlendRatio, lsMag) * 4.f) / 4.f);
+			controlFlag = true;
 		}
 		else
 		{
@@ -112,25 +135,27 @@ public:
 				momentumSaved = momentum;
 			target_moveBlendRatio = min(momentum, GetFractionByMagnitude(momentumSaved, lsMag));
 			momentum = max(1.f, BUILTIN::CEIL(target_moveBlendRatio * 4.f) / 4.f);
+			controlFlag = true;
 		}
 
-		if ((momentum > 1.f && moveBlendRatio >= 0.15f) || sprintHold)
+		if (lsMag >= 3 && (controlFlag && ((momentum >= 1.f && moveBlendRatio >= 0.15f) || sprintHold)))
 		{
 			PED::SET_PED_MIN_MOVE_BLEND_RATIO(player, target_moveBlendRatio);
 			PED::SET_PED_MAX_MOVE_BLEND_RATIO(player, target_moveBlendRatio);
 		}
 		
 		/*
-		*/
 		char buffer[32];
-		//snprintf(buffer, 32, "ratio: %f\rRADIUS: %F", move_blend_ratio, ls_radius );
-		//snprintf(buffer, 32, "%f\r%f\r%f\r%f", u, moveBlendRatio, target_moveBlendRatio, temp);
-		snprintf(buffer, 32, "          desired: %f", desiredMBR);
+//		snprintf(buffer, 32, "ratio: %f\rRADIUS: %F", move_blend_ratio, ls_radius );
+		snprintf(buffer, 32, "%f", lsMag);
+		DrawText(buffer, 0.01, 0.01);
+		snprintf(buffer, 32, "          desired: %d", task);
 		DrawText(buffer, 0.6, 0.6);
 		snprintf(buffer, 32, "    max speed: %f", momentum);
 		DrawText(buffer, 0.6, 0.65);
-		snprintf(buffer, 32, "current speed: %f", moveBlendRatio);
+		snprintf(buffer, 32, "current speed: %f", );
 		DrawText(buffer, 0.6, 0.7);
+		*/
 	}
 
 };
@@ -143,7 +168,7 @@ void update()
 	Ped		playerPed = PLAYER::PLAYER_PED_ID();
 
 	// check if player ped exists and control is on (e.g. not in a cutscene)
-	if (ENTITY::DOES_ENTITY_EXIST(playerPed) || PLAYER::IS_PLAYER_CONTROL_ON(player))
+	if ((ENTITY::DOES_ENTITY_EXIST(playerPed) || PLAYER::IS_PLAYER_CONTROL_ON(player)) && !PED::IS_PED_USING_ANY_SCENARIO(playerPed))
 		fwoc.doFWOC(playerPed);
 
 }
