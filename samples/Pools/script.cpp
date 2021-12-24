@@ -56,26 +56,53 @@ public:
 		return x * (magnitude / 127.f);
 	}
 
+	bool IsStickInput(float x, float y, float deadzone)
+	{
+		x = x - 127;
+		y = y - 127;
+
+		if (x < 0)
+			x = x * -1;
+		
+
+		if (y < 0)
+			y = y * -1;
+
+
+		return (x > deadzone) || (y > deadzone);
+	}
+
 	//Main method for determining the player's move blend ratio
 	void doFWOC(Ped player)
 	{
 		float	moveBlendRatio			= TASK::GET_PED_DESIRED_MOVE_BLEND_RATIO(player);
-		bool	sprintPressed			= PAD::IS_CONTROL_JUST_PRESSED(0, MISC::GET_HASH_KEY("INPUT_SPRINT"));
-		bool	sprintHold				= PAD::IS_CONTROL_PRESSED(0, MISC::GET_HASH_KEY("INPUT_SPRINT"));
-		bool	sprintReleased			= PAD::IS_CONTROL_JUST_RELEASED(0, MISC::GET_HASH_KEY("INPUT_SPRINT"));
 		float	x						= BUILTIN::TO_FLOAT(PAD::GET_CONTROL_VALUE(0, KEY::LS_X));
 		float	y						= BUILTIN::TO_FLOAT(PAD::GET_CONTROL_VALUE(0, KEY::LS_Y));
+		bool	sprintPressed			= PAD::IS_CONTROL_JUST_PRESSED(0, MISC::GET_HASH_KEY("INPUT_SPRINT"));
+		bool	sprintHold				= PAD::IS_CONTROL_PRESSED(0, MISC::GET_HASH_KEY("INPUT_SPRINT"));
+		float	deadzone = 4.f;
+
+		//check to avoid weird looking sprint behavior on slight stick inputs.
+		if (!IsStickInput(x, y, deadzone) && sprintHold)
+		{
+			
+			PED::SET_PED_MIN_MOVE_BLEND_RATIO(player, 0);
+			PED::SET_PED_MAX_MOVE_BLEND_RATIO(player, 0);
+			return;
+		}
+
+		float	target_moveBlendRatio	= 1.f;
+		bool	sprintReleased			= PAD::IS_CONTROL_JUST_RELEASED(0, MISC::GET_HASH_KEY("INPUT_SPRINT"));
 		float	lsMag					= GetStickMagnitude(x, y);
-		float	target_moveBlendRatio	= moveBlendRatio;
-		bool	lsMax					= false;
+		bool	lsMax					= lsMag > 125;
 		float	desiredMBR = moveBlendRatio;
 		bool	controlFlag = false;
+		
 
 		//bool	task = PED::IS_PED_USING_ANY_SCENARIO(player);
 
 		/*
 		*	Momentum is the current desired maximum speed if the player pushes the movement input all the way.
-		*/
 
 		if (!fastWalkEnabled)
 		{
@@ -84,8 +111,7 @@ public:
 				fastWalkEnabled = true;
 			}
 		}
-
-		lsMax = lsMag > 125;
+		*/
 
 		if (moveBlendRatio == 0.f)
 			momentum = 1.f;
@@ -103,21 +129,9 @@ public:
 				momentum = max(1.f + momentumIncrement, momentum);
 			}
 		}
-
-		/*
-		if (desiredMBR == 1.5f)
-			momentum = 1.5f;
-		if (sprintPressed || sprintReleased || sprintHold)
-		{
-		}
-		*/
 		
 		//Sprint is held: speed is set to a fraction of the current momentum determined by magnitude of the stick input.
-		//if (desiredMBR == 1.35f)
-		//	changeSpeed = false;
-		if (desiredMBR == 1.35f)
-			controlFlag = false;
-		else if (sprintHold)
+		if (sprintHold || sprintPressed)
 		{
 			target_moveBlendRatio = GetFractionByMagnitude(momentum, lsMag);
 			controlFlag = true;
@@ -129,17 +143,24 @@ public:
 			momentum = max(1.f, BUILTIN::CEIL(GetFractionByMagnitude(target_moveBlendRatio, lsMag) * 4.f) / 4.f);
 			controlFlag = true;
 		}
-		else
+		else if (IsStickInput(x, y, deadzone))
 		{
-			if (lsMax)
+			if (lsMax) //reset saved momentum if stick is pressed all the way again.
 				momentumSaved = momentum;
 			target_moveBlendRatio = min(momentum, GetFractionByMagnitude(momentumSaved, lsMag));
 			momentum = max(1.f, BUILTIN::CEIL(target_moveBlendRatio * 4.f) / 4.f);
 			controlFlag = true;
 		}
 
-		if (lsMag >= 3 && (controlFlag && ((momentum >= 1.f && moveBlendRatio >= 0.15f) || sprintHold)))
+	
+		if (desiredMBR == 1.35f)
+			controlFlag = false;
+		
+		//if (lsMag >= 3 && (controlFlag && ((momentum >= 1.f && moveBlendRatio >= 0.15f) || sprintHold)))
+
+		if (controlFlag && (momentum > 1.f || sprintHold || moveBlendRatio >= 1.0f))
 		{
+			target_moveBlendRatio = max(0.15f, target_moveBlendRatio);
 			PED::SET_PED_MIN_MOVE_BLEND_RATIO(player, target_moveBlendRatio);
 			PED::SET_PED_MAX_MOVE_BLEND_RATIO(player, target_moveBlendRatio);
 		}
@@ -147,9 +168,9 @@ public:
 		/*
 		char buffer[32];
 //		snprintf(buffer, 32, "ratio: %f\rRADIUS: %F", move_blend_ratio, ls_radius );
-		snprintf(buffer, 32, "%f", lsMag);
+		snprintf(buffer, 32, "%f\r%f\r%f", moveBlendRatio, x, y);
 		DrawText(buffer, 0.01, 0.01);
-		snprintf(buffer, 32, "          desired: %d", task);
+		snprintf(buffer, 32, "momentum: %f", momentum);
 		DrawText(buffer, 0.6, 0.6);
 		snprintf(buffer, 32, "    max speed: %f", momentum);
 		DrawText(buffer, 0.6, 0.65);
