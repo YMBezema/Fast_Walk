@@ -158,7 +158,7 @@ public:
 		
 		//if (lsMag >= 3 && (controlFlag && ((momentum >= 1.f && moveBlendRatio >= 0.15f) || sprintHold)))
 
-		if (controlFlag && (momentum > 1.f || sprintHold || moveBlendRatio >= 1.0f))
+		if (controlFlag && (momentum > 1.f || sprintHold || moveBlendRatio >= 1.f))
 		{
 			target_moveBlendRatio = max(0.15f, target_moveBlendRatio);
 			PED::SET_PED_MIN_MOVE_BLEND_RATIO(player, target_moveBlendRatio);
