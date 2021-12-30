@@ -81,13 +81,27 @@ public:
 		bool	sprintPressed			= PAD::IS_CONTROL_JUST_PRESSED(0, MISC::GET_HASH_KEY("INPUT_SPRINT"));
 		bool	sprintHold				= PAD::IS_CONTROL_PRESSED(0, MISC::GET_HASH_KEY("INPUT_SPRINT"));
 		float	deadzone = 4.f;
+		bool	isStickInput = IsStickInput(x, y, deadzone);
+
+
+		//if speed when running wants to be 1.5 or lower, presume sprinting is supposed to be unavailable and lock the mod until the player stands still again
+		if (sprintHold && moveBlendRatio > 1.5f && !fastWalkEnabled)
+			fastWalkEnabled = true;
+
+		if (fastWalkEnabled && (!isStickInput || (moveBlendRatio <= 1.0 && !sprintHold)))
+			fastWalkEnabled = false;
+
+		if (!fastWalkEnabled)
+		{
+			return;
+		}
 
 		//check to avoid weird looking sprint behavior on slight stick inputs.
-		if (!IsStickInput(x, y, deadzone) && sprintHold)
+		if ((!fastWalkEnabled) || (!IsStickInput(x, y, deadzone) && sprintHold))
 		{
-			
-			PED::SET_PED_MIN_MOVE_BLEND_RATIO(player, 0);
-			PED::SET_PED_MAX_MOVE_BLEND_RATIO(player, 0);
+			momentum = 1.f;
+			PED::SET_PED_MIN_MOVE_BLEND_RATIO(player, min(moveBlendRatio, 1.f));
+			PED::SET_PED_MAX_MOVE_BLEND_RATIO(player, min(moveBlendRatio, 1.f));
 			return;
 		}
 
@@ -168,7 +182,7 @@ public:
 		/*
 		char buffer[32];
 //		snprintf(buffer, 32, "ratio: %f\rRADIUS: %F", move_blend_ratio, ls_radius );
-		snprintf(buffer, 32, "%f\r%f\r%f", moveBlendRatio, x, y);
+		snprintf(buffer, 32, "%d", fastWalkEnabled);
 		DrawText(buffer, 0.01, 0.01);
 		snprintf(buffer, 32, "momentum: %f", momentum);
 		DrawText(buffer, 0.6, 0.6);
