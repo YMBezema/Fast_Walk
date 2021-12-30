@@ -26,18 +26,19 @@ void DrawText(const char* text, float x, float y)
 class FWOC
 {
 private:
-	float	momentum;
-	float	momentumSaved;
-	float	momentumIncrement;
-	bool 	fastWalkEnabled;
+	float	mbrMax;
+	float	mbrMin;
+	float	mbrMaxSaved;
+	float	mbrIncrement;
+	bool	changeSpeed;
 
 public:
 	FWOC()
 	{
-		fastWalkEnabled = false;
-		momentum = 1.f;
-		momentumSaved = momentum;
-		momentumIncrement = 0.25f;
+		mbrMax = 1.f;
+		mbrMaxSaved = mbrMax;
+		mbrIncrement = 0.25f;
+		changeSpeed = false;
 	}
 
 	//Method for finding the magnitude of an analogue stick using its x and y coordinates.
@@ -79,32 +80,9 @@ public:
 		float	x						= BUILTIN::TO_FLOAT(PAD::GET_CONTROL_VALUE(0, KEY::LS_X));
 		float	y						= BUILTIN::TO_FLOAT(PAD::GET_CONTROL_VALUE(0, KEY::LS_Y));
 		bool	sprintPressed			= PAD::IS_CONTROL_JUST_PRESSED(0, MISC::GET_HASH_KEY("INPUT_SPRINT"));
-		bool	sprintHold				= PAD::IS_CONTROL_PRESSED(0, MISC::GET_HASH_KEY("INPUT_SPRINT"));
-		float	deadzone = 4.f;
-		bool	isStickInput = IsStickInput(x, y, deadzone);
-
-
-		//if speed when running wants to be 1.5 or lower, presume sprinting is supposed to be unavailable and lock the mod until the player stands still again
-		if (sprintHold && moveBlendRatio > 1.5f && !fastWalkEnabled)
-			fastWalkEnabled = true;
-
-		if (fastWalkEnabled && (!isStickInput || (moveBlendRatio <= 1.0 && !sprintHold)))
-			fastWalkEnabled = false;
-
-		if (!fastWalkEnabled)
-		{
-			return;
-		}
-
-		//check to avoid weird looking sprint behavior on slight stick inputs.
-		if ((!fastWalkEnabled) || (!IsStickInput(x, y, deadzone) && sprintHold))
-		{
-			momentum = 1.f;
-			PED::SET_PED_MIN_MOVE_BLEND_RATIO(player, min(moveBlendRatio, 1.f));
-			PED::SET_PED_MAX_MOVE_BLEND_RATIO(player, min(moveBlendRatio, 1.f));
-			return;
-		}
-
+		bool	sprintHeld				= PAD::IS_CONTROL_PRESSED(0, MISC::GET_HASH_KEY("INPUT_SPRINT"));
+//		float	deadzone = 10.f;
+//		bool	isStickInput = IsStickInput(x, y, deadzone);
 		float	target_moveBlendRatio	= 1.f;
 		bool	sprintReleased			= PAD::IS_CONTROL_JUST_RELEASED(0, MISC::GET_HASH_KEY("INPUT_SPRINT"));
 		float	lsMag					= GetStickMagnitude(x, y);
@@ -112,78 +90,51 @@ public:
 		float	desiredMBR = moveBlendRatio;
 		bool	controlFlag = false;
 		
+		//reset max speed if player reaches standstil
+		if (moveBlendRatio == 0 || (moveBlendRatio <= 1.0 && !sprintHeld))
+			mbrMax = 1.f;
 
-		//bool	task = PED::IS_PED_USING_ANY_SCENARIO(player);
-
-		/*
-		*	Momentum is the current desired maximum speed if the player pushes the movement input all the way.
-
-		if (!fastWalkEnabled)
-		{
-			if (!sprintPressed && !(moveBlendRatio == 1.35f || moveBlendRatio == 1.5f))
-			{
-				fastWalkEnabled = true;
-			}
-		}
-		*/
-
-		if (moveBlendRatio == 0.f)
-			momentum = 1.f;
-
+		//Handle maxMBR when sprint pressed
 		if (sprintPressed)
 		{
-			if (lsMax || momentum >= 1.f) // if the stick is pushed all the way or the player is already past walking speed, increment momentum
+			if (lsMax) // if the stick is pushed all the way increment momentum
 			{
 				// Momentum is clipped between default walking speed and max running speed, and increased.
-				momentum = max(1.f, momentum);
-				momentum = min(momentum + momentumIncrement, 3.f);
+				//mbrMax = max(1.f, mbrMax);
+				mbrMax = min(mbrMax + mbrIncrement, 3.f);
 			}
 			else //player is walking slow, increase speed to first increment.
 			{
-				momentum = max(1.f + momentumIncrement, momentum);
+				mbrMax = max(1.f + mbrIncrement, mbrMax);
 			}
 		}
-		
-		//Sprint is held: speed is set to a fraction of the current momentum determined by magnitude of the stick input.
-		if (sprintHold || sprintPressed)
+		else if (sprintReleased)
 		{
-			target_moveBlendRatio = GetFractionByMagnitude(momentum, lsMag);
-			controlFlag = true;
-		}
-		else if (sprintReleased) //Sprint just got released: momentum is set to the current moveblendratio 
-		{
-			momentumSaved = momentum; //the previous momentum is saved so the 
-			target_moveBlendRatio = momentumSaved;
-			momentum = max(1.f, BUILTIN::CEIL(GetFractionByMagnitude(target_moveBlendRatio, lsMag) * 4.f) / 4.f);
-			controlFlag = true;
-		}
-		else if (IsStickInput(x, y, deadzone))
-		{
-			if (lsMax) //reset saved momentum if stick is pressed all the way again.
-				momentumSaved = momentum;
-			target_moveBlendRatio = min(momentum, GetFractionByMagnitude(momentumSaved, lsMag));
-			momentum = max(1.f, BUILTIN::CEIL(target_moveBlendRatio * 4.f) / 4.f);
-			controlFlag = true;
-		}
 
-	
-		if (desiredMBR == 1.35f)
-			controlFlag = false;
-		
-		//if (lsMag >= 3 && (controlFlag && ((momentum >= 1.f && moveBlendRatio >= 0.15f) || sprintHold)))
-
-		if (controlFlag && (momentum > 1.f || sprintHold || moveBlendRatio >= 1.f))
+		}
+		else if (sprintHeld)
 		{
-			target_moveBlendRatio = max(0.15f, target_moveBlendRatio);
-			PED::SET_PED_MIN_MOVE_BLEND_RATIO(player, target_moveBlendRatio);
-			PED::SET_PED_MAX_MOVE_BLEND_RATIO(player, target_moveBlendRatio);
+
 		}
 		
-		/*
+		
+
+		changeSpeed = mbrMax > 1.f;
+
+		if(changeSpeed)
+			PED::SET_PED_MIN_MOVE_BLEND_RATIO(player, GetFractionByMagnitude(mbrMax, lsMag));
+		//mbr = fraction of input?
+
+		//if mbr > 1.5 (aka trying to jog), change mbrMin to mbrMax
+		PED::SET_PED_MAX_MOVE_BLEND_RATIO(player, mbrMax);
+
+
+
 		char buffer[32];
 //		snprintf(buffer, 32, "ratio: %f\rRADIUS: %F", move_blend_ratio, ls_radius );
-		snprintf(buffer, 32, "%d", fastWalkEnabled);
+		snprintf(buffer, 32, "%f\r%f", mbrMax, moveBlendRatio);
 		DrawText(buffer, 0.01, 0.01);
+		/*
 		snprintf(buffer, 32, "momentum: %f", momentum);
 		DrawText(buffer, 0.6, 0.6);
 		snprintf(buffer, 32, "    max speed: %f", momentum);
