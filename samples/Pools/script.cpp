@@ -37,7 +37,7 @@ public:
 	{
 		mbrMax = 1.f;
 		mbrMaxSaved = mbrMax;
-		mbrIncrement = 0.25f;
+		mbrIncrement = 0.5f;
 		changeSpeed = false;
 	}
 
@@ -91,7 +91,7 @@ public:
 		bool	controlFlag = false;
 		
 		//reset max speed if player reaches standstil
-		if (moveBlendRatio == 0 || (moveBlendRatio <= 1.0 && !sprintHeld))
+		if (moveBlendRatio == 0 || (moveBlendRatio < 1.0 && !sprintHeld))
 			mbrMax = 1.f;
 
 		//Handle maxMBR when sprint pressed
@@ -108,24 +108,16 @@ public:
 				mbrMax = max(1.f + mbrIncrement, mbrMax);
 			}
 		}
-		else if (sprintReleased)
-		{
 
-		}
-		else if (sprintHeld)
-		{
 
-		}
+
 		
 		
 
-		changeSpeed = mbrMax > 1.f;
-
-		if(changeSpeed)
-			PED::SET_PED_MIN_MOVE_BLEND_RATIO(player, GetFractionByMagnitude(mbrMax, lsMag));
-		//mbr = fraction of input?
-
+		
 		//if mbr > 1.5 (aka trying to jog), change mbrMin to mbrMax
+		if(moveBlendRatio >= 1.5f)
+			PED::SET_PED_MIN_MOVE_BLEND_RATIO(player, GetFractionByMagnitude(mbrMax, lsMag));
 		PED::SET_PED_MAX_MOVE_BLEND_RATIO(player, mbrMax);
 
 
